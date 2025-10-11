@@ -74,13 +74,17 @@
  * You might find it useful to add your own #defines to improve readability here
  */
 
+
+// Different states for FSM
 typedef enum {
     STATE_NONE, STATE_PB0, STATE_PB1, STATE_BOTH
 } state_t;
 
-state_t state = STATE_NONE;
+state_t state = STATE_NONE; // Initial FSM state
 
-uint16_t PB2_BLINK_RATE = 4000;
+uint16_t PB2_BLINK_RATE = 4000; // Initial value for LED1 blink rate in seconds
+
+
 
 int main(void) {
     
@@ -93,34 +97,24 @@ int main(void) {
     ANSELA = 0x0000; /* keep this line as it sets I/O pins that can also be analog to be digital */
     ANSELB = 0x0000; /* keep this line as it sets I/O pins that can also be analog to be digital */
     
-//    newClk(500);
     
-    //T3CON config
-    T2CONbits.T32 = 0; // operate timer 2 as 16 bit timer
-    T3CONbits.TCKPS = 3; // set prescaler to 1:8
-    T3CONbits.TCS = 0; // use internal clock
-    T3CONbits.TSIDL = 0; //operate in idle mode
-    IPC2bits.T3IP = 2; //7 is highest and 1 is lowest pri.
-    IFS0bits.T3IF = 0;
-    IEC0bits.T3IE = 1; //enable timer interrupt
-    PR3 = 7812; // set the count value for 0.5 s (or 500 ms)
-    TMR3 = 0;
-    T3CONbits.TON = 0;
     
     //T2CON config
-    T2CONbits.TCKPS = 3;
-    T2CONbits.TCS = 0;
-    T2CONbits.TSIDL = 0;
-    IFS0bits.T2IF = 0;
-    IEC0bits.T2IE = 1;
-    PR2 = 3906;
+    T2CONbits.T32 = 0;      // operate timer 2 as 16 bit timer
+    T2CONbits.TCKPS = 3;    // set prescaler to 1:256
+    
+    T2CONbits.TCS = 0;      // use internal clock
+    T2CONbits.TSIDL = 0;    // operate in idle mode
+    IFS0bits.T2IF = 0;      // set flag 0
+    IEC0bits.T2IE = 1;      // enable timer interrupt
+    PR2 = 3906;             // set timer limit - overriden in delay function later
     TMR2 = 0;
-    T2CONbits.TON = 0;
+    T2CONbits.TON = 0;      // disable timer initially
     
     // IOC config
     // PB0
-    IOCNBbits.IOCNB8 = 1;
-    IOCPBbits.IOCPB8 = 1;
+    IOCNBbits.IOCNB8 = 1; // IOC high - low
+    IOCPBbits.IOCPB8 = 1; // IOC low - high
     //PB1
     IOCNAbits.IOCNA4 = 1;
     IOCPAbits.IOCPA4 = 1;
@@ -128,7 +122,7 @@ int main(void) {
     IOCNBbits.IOCNB9 = 1;
     IOCPBbits.IOCPB9 = 1;
     
-    PADCONbits.IOCON = 1;
+    PADCONbits.IOCON = 1; // enables IOC
     IOCSTATbits.IOCPBF = 0;
     
     IFS1bits.IOCIF = 0;
@@ -143,20 +137,20 @@ int main(void) {
     while(1) {        
         
         switch (state) {
-            case STATE_NONE:
+            case STATE_NONE: // No buttons pressed - all LEDs OFF
                 LED0 = 0;
                 LED1 = 0;
                 Idle();
                 break;
-            case STATE_PB0:
+            case STATE_PB0: // PB0 pressed - LED0 flashes at 0.25s
                 LED0 ^= 1;
                 delay_ms(250);
                 break;
-            case STATE_BOTH:
+            case STATE_BOTH: // Both pressed - LED0 flashes at 0.5s
                 LED0 ^= 1;
                 delay_ms(500);
                 break;
-            case STATE_PB1:
+            case STATE_PB1: // PB1 pressed - LED1 flashes at PB2_BLINK_RATE
                 LED1 ^= 1;
                 delay_ms(PB2_BLINK_RATE);
                 break;
@@ -171,31 +165,27 @@ int main(void) {
 // Timer 2 interrupt subroutine
 void __attribute__((interrupt, no_auto_psv)) _T2Interrupt(void){
     //Don't forget to clear the timer 2 interrupt flag!
-    IFS0bits.T2IF = 0;
-    T2CONbits.TON = 0;
-}
-
-void __attribute__((interrupt, no_auto_psv)) _T3Interrupt(void){
-    //Don't forget to clear the timer 2 interrupt flag!
-    IFS0bits.T3IF = 0;
-    LED0 ^= 1;
-    T3CONbits.TON = 0;
+    IFS0bits.T2IF = 0; // reset flag
+    T2CONbits.TON = 0; // turn timer OFF
 }
 
 void __attribute__ ((interrupt, no_auto_psv)) _IOCInterrupt(void) {
-    LED0 = 0;
+    
+    // set both LEDs OFF
+    LED0 = 0; 
     LED1 = 0;
     
+    // divide PB2_BLINK_RATE by 2 if PB2 pressed until .125s
     if (PB2 == 0) 
         PB2_BLINK_RATE = PB2_BLINK_RATE > 125 ? PB2_BLINK_RATE / 2 : 4000;
    
     
-    if ((PB0 == 1) && (PB1 == 1))       state = STATE_NONE;
-    else if ((PB0 == 0) && (PB1 == 0))  state = STATE_BOTH;
-    else if ((PB0 == 0))                state = STATE_PB0;
-    else if ((PB1 == 0))                state = STATE_PB1;
+    if ((PB0 == 1) && (PB1 == 1))       state = STATE_NONE; // no buttons pressed
+    else if ((PB0 == 0) && (PB1 == 0))  state = STATE_BOTH; // both buttons pressed
+    else if ((PB0 == 0))                state = STATE_PB0;  // PB0 pressed
+    else if ((PB1 == 0))                state = STATE_PB1;  // PB1 pressed
     
-    IFS1bits.IOCIF = 0;
+    IFS1bits.IOCIF = 0; // clear IOC flag
     
 }
 
@@ -220,9 +210,15 @@ void IOinit() {
 }
 
 void delay_ms(uint16_t ms) {
+    
+    // set timer2 count limit
+    // timer frequency of 15625 due to prescaler defined earlier
+    // freq/1000 to convert ms to s
     PR2 = (15625/1000) * ms;
-    TMR2 = 0;
-    T2CONbits.TON = 1;
-    Idle();
+    
+    TMR2 = 0;           // reset timer count value
+    T2CONbits.TON = 1;  // turn timer ON
+    Idle();             // wait for interrupt
 }
 
+  
