@@ -45,7 +45,7 @@
 #pragma config WDTCLK = LPRC    //WDT Clock Source Select bits->WDT uses LPRC
 
 // FPOR
-#pragma config BOREN = ON    //Brown Out Enable bit->Brown Out Enable Bit
+#pragma config BOREN = ON    //Brown Out Enable bit->Brown Out Enable Bit  
 #pragma config LPCFG = OFF    //Low power regulator control->No Retention Sleep
 #pragma config DNVPEN = ENABLE    //Downside Voltage Protection Enable bit->Downside protection enabled using ZPBOR when BOR is inactive
 
@@ -64,11 +64,11 @@
 #include "uart.h"
 #define BUFMAX  63
 #define LED0    _LATB5
-#define LED1    _LATB6
+#define LED1    _LATB6 
 #define LED2    _LATB7
 #define PB0     _RB8
 #define PB1     _RA4
-#define PB2     _RB9
+#define PB2     _RB4
 /*#define TESTSENDWW */
 
 /**
@@ -89,8 +89,13 @@ state_t previous_state;
 /*program should start in fast mode*/
 mode_t mode = FAST;
 
+uint8_t PB0F = 0;
+uint8_t PB1F = 0;
+uint8_t PB2F = 0;
+
 uint8_t time_settings[3] = {250, 500, 1000};
 uint8_t time_setting = 'X';
+
 
 int main(void) {
 
@@ -98,60 +103,49 @@ int main(void) {
     
     ClearTerminal();
     TM2init();
+    TM3init();
     IOCinit();
     InitUART2();
     IOinit();
     ClearTerminal();
     while(1) {
-        switch(state){
+        
+        switch (state) {
             case IDLE:
                 
-                LED0 = 0;
-                Idle();
-                break;
-                
-            case PB0P:
-                
-                LED0 ^= 1;
-                if (mode == FAST){
-                    delay_ms(250);
-                } else {
-                    delay_ms(3000);
-                }
-                break;
-                
-            case PB1P:
-
                 if (mode == FAST) {
-                    LED0 ^= 1;
-                    delay_ms(500);
-                } else {
-                    if (time_setting != 'X')
-                    LED0 ^= 1;
-                    delay_ms(time_settings[time_setting - 48]);
-                }
-                break;
-                
-            case PB2P:
-
-                if (mode == FAST) {
-                    LED0 ^= 1;
-                    delay_ms(1000);
-                } else {
-                    Disp2String("Prog Mode: Blink setting = ");
-                    time_setting = RecvUartChar();
-                }
-                break;   
-                
-            case BOTHP:
-
-                if (mode == FAST) {
-                    LED0 = 1;
+                    ClearTerminal();
+                    Disp2String("Fast Mode: IDLE");
                     Idle();
-                }else{
-                
+                    
+                } else {
+                    ClearTerminal();
+                    Disp2String("Prog Mode: IDLE");
+                    Idle();
                 }
+                
                 break;
+            case PB0P:
+                ClearTerminal();
+                Disp2String("Fast Mode: PB0 was pressed");
+                LED0 ^= 1;
+                delay_ms(250);
+                break;
+            case PB1P:
+                ClearTerminal();
+                Disp2String("Fast Mode: PB1 was pressed");
+                LED0 ^= 1;
+                delay_ms(500);
+                break;
+            case PB2P:
+                ClearTerminal();
+                Disp2String("Fast Mode: PB2 was pressed");
+                LED0 ^= 1;
+                delay_ms(1000);
+                break;
+            case BOTHP:
+                LED0 = 1;
+                Idle();
         }
     }
     
@@ -163,7 +157,6 @@ void IOinit(void){
     TRISBbits.TRISB6 = 0;
     
     LED0 = 0;
-    LED1 = 0;
     
     // set pin for button
     //PB0
@@ -173,20 +166,20 @@ void IOinit(void){
     TRISAbits.TRISA4 = 1;
     IOCPUAbits.CNPUA4 = 1;
     //PB2
-    TRISBbits.TRISB9 = 1;
-    IOCPUBbits.CNPUB9 = 1;
+    TRISBbits.TRISB4 = 1;
+    IOCPUBbits.CNPUB4 = 1;
 }
 
 void IOCinit(void) {
     // PB0
     IOCNBbits.IOCNB8 = 1; // IOC high - low
-    IOCPBbits.IOCPB8 = 1; // IOC low - high
+//    IOCPBbits.IOCPB8 = 1; // IOC low - high
     //PB1
     IOCNAbits.IOCNA4 = 1;
-    IOCPAbits.IOCPA4 = 1;
+//    IOCPAbits.IOCPA4 = 1;
     //PB2
-    IOCNBbits.IOCNB9 = 1;
-    IOCPBbits.IOCPB9 = 1;
+    IOCNBbits.IOCNB4 = 1;
+//    IOCPBbits.IOCPB9 = 1;
     
     PADCONbits.IOCON = 1; // enables IOC
     IOCSTATbits.IOCPBF = 0;
@@ -210,65 +203,73 @@ void TM2init() {
     T2CONbits.TON = 0;      // disable timer initially
 }
 
+void TM3init() {
+    //T3CON config
+    T3CONbits.TCKPS = 3;    // set prescaler to 1:256
+    
+    T3CONbits.TCS = 0;      // use internal clock
+    T3CONbits.TSIDL = 0;    // operate in idle mode
+    IFS0bits.T3IF = 0;      // set flag 0
+    IEC0bits.T3IE = 1;      // enable timer interrupt
+    PR3 = 3906;             // set timer limit - overriden in delay function later
+    TMR2 = 0;
+    T3CONbits.TON = 0;      // disable timer initially
+}
+
 void __attribute__ ((interrupt, no_auto_psv)) _IOCInterrupt(void) {
-    /*if (PB2 == 0) 
-     * PB2_BLINK_RATE = PB2_BLINK_RATE > 125 ? PB2_BLINK_RATE / 2 : 4000;
-     */
     
-    LED0 = 1;
-    LED1 = 0;
-    LED2 = 0;
+    PB0F = !PB0;
+    PB1F = !PB1;
+    PB2F = !PB2;
     
-    previous_state = state;
+    ClearTerminal();
     
-    uint8_t number_pressed = (~PB0 & 1) + (~PB1 & 1) + (~PB2 & 1);
-    if (previous_state = BOTHP) {
-        state = IDLE;
-    } else if (number_pressed == 2) {
-        if(mode = FAST) {
-            if (~PB0 & ~PB1) Disp2String("Fast Mode: PB0 and PB1 are pressed");
-            else if (~PB0 & ~PB2) Disp2String("Fast Mode: PB0 and PB2 are pressed");
-            else if (~PB1 & ~PB2) Disp2String("Fast Mode: PB1 and PB2 are pressed");
-        } else if (mode = PROG) {     }
-        
-        state = BOTHP;
-        
-    } else if (number_pressed == 3) {
-        if (previous_state == IDLE) {
-            if (mode == PROG) mode = FAST;
-            else mode = PROG;
+    LED0 = 0;
+    state_t previous_state = state;
+    
+    
+    if (state == BOTHP) state = IDLE;
+    else if ((state == IDLE) && (PB0F & PB1F & PB2F)) 
+        mode = (state == PROG) ? FAST : PROG;
+    else {
+        if ((PB0F & PB1F) | (PB0F & PB2F) | (PB1F & PB2F)) {
+            state = BOTHP;
+            if (PB0F & PB1F) Disp2String("Fast Mode: PB0 and PB1 were pressed");
+            else if (PB0F & PB2F) Disp2String("Fast Mode: PB0 and PB2 were pressed");
+            else if (PB1F & PB2F) Disp2String("Fast Mode: PB1 and PB2 were pressed");
+        } else if (PB0F) {
+            state = PB0P;
+        } else if (PB1F) {
+            state = PB1P;
+        } else if (PB2F) {
+            state = PB2P;
         }
-    } else {
-        
-        if (~PB0) state = PB0P;
-        else if (~PB1) state = PB1P;
-        else if (~PB2) state = PB1P;
-        
-        if (state == previous_state) state = IDLE;
-        
-        if (mode == FAST) {
-            if (state = PB0P) Disp2String("Fast Mode: PB0 was pressed");
-            else if (state = PB1P) Disp2String("Fast Mode: PB1 was pressed");
-            else if (state = PB2P) Disp2String("Fast Mode: PB2 was pressed");
-            else if (state = IDLE) Disp2String("Fast Mode: IDLE");
-        } else if (mode = PROG) {
-            if (state = PB0P) Disp2String("Prog Mode: PB0 was pressed");
-            else if (state = PB1P) {
-                Disp2String("Prog Mode: PB1 was pressed, Setting = ");
-                XmitUART2(time_setting, 1);
-            } else if (state = IDLE) Disp2String("Prog Mode: IDLE");
+
+        if (state == previous_state) {
+            state = IDLE;
         }
     }
     
+    PB0F = 0;
+    PB1F = 0;
+    PB2F = 0;
     
-
     IFS1bits.IOCIF = 0;
+
     
 }
 
 void __attribute__((interrupt, no_auto_psv)) _T2Interrupt(void){
     //Don't forget to clear the timer 2 interrupt flag!
     IFS0bits.T2IF = 0; // reset flag
+    T2CONbits.TON = 0; // turn timer OFF
+}
+
+void __attribute__((interrupt, no_auto_psv)) _T3Interrupt(void){
+    //Don't forget to clear the timer 2 interrupt flag!
+    
+    debounce_progress = 0;
+    IFS0bits.T3IF = 0; // reset flag
     T2CONbits.TON = 0; // turn timer OFF
 }
 
