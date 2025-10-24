@@ -119,7 +119,7 @@ int main(void) {
             IEC1bits.IOCIE = 0;
             delay_ms_3(75);
             
-            state_t previous_state = state;
+            previous_state = state;
             
             if ((state == IDLE) && (PB0F & PB1F & PB2F)) 
                 mode ^= 1;
@@ -127,7 +127,10 @@ int main(void) {
                 state = IDLE;
             else {
                 if ((PB0F & PB1F) | (PB0F & PB2F) | (PB1F & PB2F)) {
-                    state = BOTHP;
+                    if (mode == FAST)
+                        state = BOTHP;
+                    else
+                        state = IDLE;
                 } else if (PB0F) {
                     state = PB0P;
                 } else if (PB1F) {
@@ -190,7 +193,9 @@ int main(void) {
                     LED0 ^= 1;
                     delay_ms(1000);
                 }else{
-                    
+                    Disp2String("Prog Mode: Blink setting = ");
+                    XmitUART2(time_setting, 1);
+                    time_setting = RecvUartChar();                    
                 }
                 break;
             case BOTHP:
@@ -201,6 +206,8 @@ int main(void) {
 
                     LED0 = 1;
                     Idle();
+                } else {
+                    state = IDLE;
                 }
         }
     }
@@ -293,6 +300,7 @@ void __attribute__ ((interrupt, no_auto_psv)) _IOCInterrupt(void) {
 //    PB1F = 0;
 //    PB2F = 0;
 //    
+    CNflag = 1;
     IFS1bits.IOCIF = 0;
 
     
