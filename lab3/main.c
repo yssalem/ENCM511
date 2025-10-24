@@ -149,8 +149,6 @@ int main(void) {
         switch (state) {
             case IDLE:
                 
-                LED0 = 0;
-                
                 if (mode == FAST) {
 
                     Disp2String("Fast Mode: IDLE");
@@ -164,31 +162,46 @@ int main(void) {
                 
                 break;
             case PB0P:
-
-                Disp2String("Fast Mode: PB0 was pressed");
-                LED0 ^= 1;
-                delay_ms(250);
+                if(mode == FAST){
+                    Disp2String("Fast Mode: PB0 was pressed");
+                    LED0 ^= 1;
+                    delay_ms(250);
+                } else{
+                    Disp2String("Prog Mode: PB0 was pressed");
+                    LED0 ^= 1;
+                    delay_ms(3000);
+                }
                 break;
             case PB1P:
-
-                Disp2String("Fast Mode: PB1 was pressed");
-                LED0 ^= 1;
-                delay_ms(500);
+                if(mode == FAST){
+                    Disp2String("Fast Mode: PB1 was pressed");
+                    LED0 ^= 1;
+                    delay_ms(500);
+                }else{
+                    Disp2String("Prog Mode: PB1 was pressed, setting ");
+                    XmitUART2(time_setting, 1);
+                    LED0 ^= 1;
+                    delay_ms(time_settings[time_setting - 48]);
+                }
                 break;
             case PB2P:
-
-                Disp2String("Fast Mode: PB2 was pressed");
-                LED0 ^= 1;
-                delay_ms(1000);
+                if(mode == FAST){
+                    Disp2String("Fast Mode: PB2 was pressed");
+                    LED0 ^= 1;
+                    delay_ms(1000);
+                }else{
+                    
+                }
                 break;
             case BOTHP:
-                
-                if (PB0F & PB1F) Disp2String("Fast Mode: PB0 and PB1 were pressed");
-                else if (PB0F & PB2F) Disp2String("Fast Mode: PB0 and PB2 were pressed");
-                else if (PB1F & PB2F) Disp2String("Fast Mode: PB1 and PB2 were pressed");
-                
-                LED0 = 1;
-                Idle();
+                if(mode == FAST){
+                    if (PB0F & PB1F) Disp2String("Fast Mode: PB0 and PB1 were pressed");
+                    else if (PB0F & PB2F) Disp2String("Fast Mode: PB0 and PB2 were pressed");
+                    else if (PB1F & PB2F) Disp2String("Fast Mode: PB1 and PB2 were pressed");
+
+                    LED0 = 1;
+                    Idle();
+                }
         }
     }
     
