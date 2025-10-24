@@ -7,7 +7,9 @@
 
 
 #include "uart.h"
+#include "xc.h"
 
+uint8_t CNflag = 0;
 uint8_t received_char = 0;
 uint8_t RXFlag = 0;
 
@@ -130,19 +132,18 @@ void RecvUart(char* input, uint8_t buf_size)
 char RecvUartChar()
 {	
     char last_char;
-    XmitUART2(' ',1);
     // wait for enter key
-    while (last_char != 0x0D) {
+    while (1) {
+
         if (RXFlag == 1) {
             
-            // return the last character received if you see ENTER
             if (received_char == 0x0D) {
                 RXFlag = 0;
                 return last_char;
             }
             
             // only store alphanumeric characters
-            if (received_char >= 32 && received_char <= 126) {
+            if (received_char >= 48 && received_char <= 50) {
                 XmitUART2(0x08,1); // send backspace
                 last_char = received_char;
                 XmitUART2(received_char,1); // loop back display
@@ -152,9 +153,10 @@ char RecvUartChar()
             RXFlag = 0;
         }
         
-        // if (CNflag == 1) { // this allows breaking out of the busy wait if CN interrupts are enabled...
-        //     add logic here
-        // }
+        if (CNflag == 1) { // this allows breaking out of the busy wait if CN interrupts are enabled...
+            CNflag = 0;
+            break;
+        }
     }
     return last_char;
 }
