@@ -110,40 +110,47 @@ int main(void) {
     ClearTerminal();
     while(1) {
         
+        ClearTerminal();
+        
         switch (state) {
             case IDLE:
                 
                 if (mode == FAST) {
-                    ClearTerminal();
+
                     Disp2String("Fast Mode: IDLE");
                     Idle();
                     
                 } else {
-                    ClearTerminal();
+
                     Disp2String("Prog Mode: IDLE");
                     Idle();
                 }
                 
                 break;
             case PB0P:
-                ClearTerminal();
+
                 Disp2String("Fast Mode: PB0 was pressed");
                 LED0 ^= 1;
                 delay_ms(250);
                 break;
             case PB1P:
-                ClearTerminal();
+
                 Disp2String("Fast Mode: PB1 was pressed");
                 LED0 ^= 1;
                 delay_ms(500);
                 break;
             case PB2P:
-                ClearTerminal();
+
                 Disp2String("Fast Mode: PB2 was pressed");
                 LED0 ^= 1;
                 delay_ms(1000);
                 break;
             case BOTHP:
+                
+                if (PB0F & PB1F) Disp2String("Fast Mode: PB0 and PB1 were pressed");
+                else if (PB0F & PB2F) Disp2String("Fast Mode: PB0 and PB2 were pressed");
+                else if (PB1F & PB2F) Disp2String("Fast Mode: PB1 and PB2 were pressed");
+                
                 LED0 = 1;
                 Idle();
         }
@@ -218,6 +225,14 @@ void TM3init() {
 
 void __attribute__ ((interrupt, no_auto_psv)) _IOCInterrupt(void) {
     
+//    PR3 = (float)(15625/1000) * 75.0;
+//    
+//    TMR3 = 0;           // reset timer count value
+//    T3CONbits.TON = 1;  // turn timer ON
+//    Idle();             // wait for interrupt
+    
+    for (uint32_t i = 0; i < 64000; i++) {}
+    
     PB0F = !PB0;
     PB1F = !PB1;
     PB2F = !PB2;
@@ -227,16 +242,13 @@ void __attribute__ ((interrupt, no_auto_psv)) _IOCInterrupt(void) {
     LED0 = 0;
     state_t previous_state = state;
     
-    
-    if (state == BOTHP) state = IDLE;
-    else if ((state == IDLE) && (PB0F & PB1F & PB2F)) 
-        mode = (state == PROG) ? FAST : PROG;
+    if (PB0F & PB1F & PB2F) 
+        mode = (state == FAST) ? PROG : FAST;
+    else if (state == BOTHP) 
+        state = IDLE;
     else {
         if ((PB0F & PB1F) | (PB0F & PB2F) | (PB1F & PB2F)) {
             state = BOTHP;
-            if (PB0F & PB1F) Disp2String("Fast Mode: PB0 and PB1 were pressed");
-            else if (PB0F & PB2F) Disp2String("Fast Mode: PB0 and PB2 were pressed");
-            else if (PB1F & PB2F) Disp2String("Fast Mode: PB1 and PB2 were pressed");
         } else if (PB0F) {
             state = PB0P;
         } else if (PB1F) {
@@ -250,10 +262,10 @@ void __attribute__ ((interrupt, no_auto_psv)) _IOCInterrupt(void) {
         }
     }
     
-    PB0F = 0;
-    PB1F = 0;
-    PB2F = 0;
-    
+//    PB0F = 0;
+//    PB1F = 0;
+//    PB2F = 0;
+//    
     IFS1bits.IOCIF = 0;
 
     
@@ -268,9 +280,8 @@ void __attribute__((interrupt, no_auto_psv)) _T2Interrupt(void){
 void __attribute__((interrupt, no_auto_psv)) _T3Interrupt(void){
     //Don't forget to clear the timer 2 interrupt flag!
     
-    debounce_progress = 0;
     IFS0bits.T3IF = 0; // reset flag
-    T2CONbits.TON = 0; // turn timer OFF
+    T3CONbits.TON = 0; // turn timer OFF
 }
 
 void delay_ms(uint16_t ms) {
