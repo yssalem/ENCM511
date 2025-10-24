@@ -93,6 +93,8 @@ uint8_t PB0F = 0;
 uint8_t PB1F = 0;
 uint8_t PB2F = 0;
 
+uint8_t STATE_CHANGE = 0;
+
 uint8_t time_settings[3] = {250, 500, 1000};
 uint8_t time_setting = 'X';
 
@@ -112,8 +114,42 @@ int main(void) {
         
         ClearTerminal();
         
+        if (STATE_CHANGE) {
+            
+            IEC1bits.IOCIE = 0;
+            delay_ms_3(75);
+            
+            state_t previous_state = state;
+            
+            if ((state == IDLE) && (PB0F & PB1F & PB2F)) 
+                mode ^= 1;
+            else if (state == BOTHP) 
+                state = IDLE;
+            else {
+                if ((PB0F & PB1F) | (PB0F & PB2F) | (PB1F & PB2F)) {
+                    state = BOTHP;
+                } else if (PB0F) {
+                    state = PB0P;
+                } else if (PB1F) {
+                    state = PB1P;
+                } else if (PB2F) {
+                    state = PB2P;
+                }
+
+                if (state == previous_state) {
+                    state = IDLE;
+                }
+            }
+            
+            STATE_CHANGE = 0;
+            
+            IEC1bits.IOCIE = 1;
+        }
+        
         switch (state) {
             case IDLE:
+                
+                LED0 = 0;
                 
                 if (mode == FAST) {
 
@@ -231,36 +267,14 @@ void __attribute__ ((interrupt, no_auto_psv)) _IOCInterrupt(void) {
 //    T3CONbits.TON = 1;  // turn timer ON
 //    Idle();             // wait for interrupt
     
-    for (uint32_t i = 0; i < 64000; i++) {}
-    
-    PB0F = !PB0;
-    PB1F = !PB1;
-    PB2F = !PB2;
+    STATE_CHANGE = 1;
     
     ClearTerminal();
     
     LED0 = 0;
-    state_t previous_state = state;
-    
-    if (PB0F & PB1F & PB2F) 
-        mode = (state == FAST) ? PROG : FAST;
-    else if (state == BOTHP) 
-        state = IDLE;
-    else {
-        if ((PB0F & PB1F) | (PB0F & PB2F) | (PB1F & PB2F)) {
-            state = BOTHP;
-        } else if (PB0F) {
-            state = PB0P;
-        } else if (PB1F) {
-            state = PB1P;
-        } else if (PB2F) {
-            state = PB2P;
-        }
 
-        if (state == previous_state) {
-            state = IDLE;
-        }
-    }
+    
+
     
 //    PB0F = 0;
 //    PB1F = 0;
@@ -280,6 +294,10 @@ void __attribute__((interrupt, no_auto_psv)) _T2Interrupt(void){
 void __attribute__((interrupt, no_auto_psv)) _T3Interrupt(void){
     //Don't forget to clear the timer 2 interrupt flag!
     
+    PB0F = !PB0;
+    PB1F = !PB1;
+    PB2F = !PB2;
+    
     IFS0bits.T3IF = 0; // reset flag
     T3CONbits.TON = 0; // turn timer OFF
 }
@@ -289,9 +307,21 @@ void delay_ms(uint16_t ms) {
     // set timer2 count limit
     // timer frequency of 15625 due to prescaler defined earlier
     // freq/1000 to convert ms to s
-    PR2 = (15625/1000) * ms;
+    PR2 = (float)(15625/1000) * (float)ms;
     
     TMR2 = 0;           // reset timer count value
     T2CONbits.TON = 1;  // turn timer ON
+    Idle();             // wait for interrupt
+}
+
+void delay_ms_3(uint16_t ms) {
+    
+    // set timer3 count limit
+    // timer frequency of 15625 due to prescaler defined earlier
+    // freq/1000 to convert ms to s
+    PR3 = (float)(15625/1000) * (float)ms;
+    
+    TMR3 = 0;           // reset timer count value
+    T3CONbits.TON = 1;  // turn timer ON
     Idle();             // wait for interrupt
 }
