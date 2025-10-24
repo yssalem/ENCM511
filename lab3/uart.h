@@ -69,6 +69,8 @@ void XmitUART2(char CharNum, unsigned int repeatNo);
 void RecvUart(char* input, uint8_t buf_size);
 char RecvUartChar(void);
 
+extern uint8_t CNflag;
+
 #ifdef	__cplusplus
 extern "C" {
 #endif /* __cplusplus */
@@ -81,4 +83,3 @@ extern "C" {
 #endif /* __cplusplus */
 
 #endif	/* XC_HEADER_TEMPLATE_H */
-
