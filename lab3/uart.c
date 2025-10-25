@@ -8,6 +8,7 @@
 
 #include "uart.h"
 #include "xc.h"
+#include "timer.h"
 
 uint8_t CNflag = 0;
 uint8_t received_char = 0;
@@ -19,12 +20,15 @@ void ClearTerminal(void) {
 void InitUART2(void) 
 {
 
-    RPINR19bits.U2RXR = 11; // ??????????????????????
-    RPOR5bits.RP10R = 5;    // ??????????????????????
+    RPINR19bits.U2RXR = 11; // configures pin 22 as uart receive pin
+    RPOR5bits.RP10R = 5;    // configures pin 21 as uart transmit pin
 
     U2MODE = 0b0000000010001000;
 
-    U2BRG = 103;            // ??????????????????????
+    U2BRG = 103;            // set baud rate to 9600
+                            // Fcy / (4 * 9600) - 1 = 103 
+                            // 4 used instead of 16 
+                            // since BRGH = 1 in U2MODE above
     
 	U2STAbits.UTXISEL0 = 0;
     U2STAbits.UTXISEL1 = 0;
@@ -133,7 +137,8 @@ char RecvUartChar()
 {	
     char last_char;
     // wait for enter key
-    while (1) {
+    while (1) { // changed from waiting for enter key to running indefinitely
+        
 
         if (RXFlag == 1) {
             
@@ -142,7 +147,7 @@ char RecvUartChar()
                 return last_char;
             }
             
-            // only store alphanumeric characters
+            // bounds set to only allow '0' - '2'
             if (received_char >= 48 && received_char <= 50) {
                 XmitUART2(0x08,1); // send backspace
                 last_char = received_char;
@@ -153,11 +158,19 @@ char RecvUartChar()
             RXFlag = 0;
         }
         
+        // CNflag set by IOC ISR
+        // used to exit infinite loop
         if (CNflag == 1) { // this allows breaking out of the busy wait if CN interrupts are enabled...
             CNflag = 0;
             break;
         }
+        
+        // flash LED at .125s on
+        _LATB5 ^= 1;
+        delay_ms(125);
     }
+    
+    // returns last character that was inputted
     return last_char;
 }
 
