@@ -62,39 +62,36 @@
 
 #include "xc.h"
 #include "uart.h"
-#define BUFMAX  63
-#define LED0    _LATB5
-#define LED1    _LATB6 
-#define LED2    _LATB7
-#define PB0     _RB8
-#define PB1     _RA4
-#define PB2     _RB4
-/*#define TESTSENDWW */
+#include "IOinit.h"
+#include "IOCinit.h"
+#include "timer.h"
+
 
 /**
  * You might find it useful to add your own #defines to improve readability here
  */
 
-uint16_t slow = 0;
-char received;
-
-/*6 state FSM:*/
+/*5 state FSM:*/
 typedef enum {IDLE, PB0P, PB1P, PB2P, BOTHP} state_t;
 /*2 state Flag --> Does NOT count towards the FSM, only a flag to be checked*/
 typedef enum {PROG, FAST} mode_t;
 
 /*start state in NONE*/
 state_t state = IDLE;
+// stores previous state before transitions
 state_t previous_state;
 /*program should start in fast mode*/
 mode_t mode = FAST;
 
+// these flags are used for next state logic
 uint8_t PB0F = 0;
 uint8_t PB1F = 0;
 uint8_t PB2F = 0;
 
+// this flag is set in IOC to indicate state change in while(1)
 uint8_t STATE_CHANGE = 0;
 
+// time settings used for prog mode PB1 state
 uint8_t time_settings[3] = {250, 500, 1000};
 uint8_t time_setting = 'X';
 
@@ -104,50 +101,66 @@ int main(void) {
     // IOC config
     
     ClearTerminal();
+    
+    // all necessary initializations
     TM2init();
     TM3init();
     IOCinit();
     InitUART2();
     IOinit();
-    ClearTerminal();
+
     while(1) {
         
         ClearTerminal();
         
+        // if the STATE_CHANGE is set from IOC ISR, go into next state logic.        
         if (STATE_CHANGE) {
             
+            // turn of IOC interrupt until end of next state logic
             IEC1bits.IOCIE = 0;
-            delay_ms_3(75);
+            
+            // debounce delay time for button signals to stabilize
+            debounce(75);
             
             previous_state = state;
             
+            // switch  between fast and prog modes when in idle all PBs pressed
             if ((state == IDLE) && (PB0F & PB1F & PB2F)) 
                 mode ^= 1;
+            
+            // BOTHP => IDLE given any button press from both state
             else if (state == BOTHP) 
                 state = IDLE;
+            
             else {
+                
+                // check if two buttons are pressed
                 if ((PB0F & PB1F) | (PB0F & PB2F) | (PB1F & PB2F)) {
                     if (mode == FAST)
                         state = BOTHP;
                     else
                         state = IDLE;
-                } else if (PB0F) {
+                } else if (PB0F) { // check if PB0 was pressed
                     state = PB0P;
-                } else if (PB1F) {
+                } else if (PB1F) { // check if PB1 was pressed
                     state = PB1P;
-                } else if (PB2F) {
+                } else if (PB2F) { // check if PB2 was pressed
                     state = PB2P;
                 }
-
+                
+                // return to idle if same button as current state was pressed
                 if (state == previous_state) {
                     state = IDLE;
                 }
             }
             
+            // reset flag for state change logic
             STATE_CHANGE = 0;
             
+            // turn IOC interrupts on again
             IEC1bits.IOCIE = 1;
         }
+        
         
         switch (state) {
             case IDLE:
@@ -184,6 +197,10 @@ int main(void) {
                     Disp2String("Prog Mode: PB1 was pressed, setting ");
                     XmitUART2(time_setting, 1);
                     LED0 ^= 1;
+                    
+                    // delay time is based on user input
+                    // if user selected mode '1', index is equal to
+                    // ascii value of '1' - '0', equaling integer 1
                     delay_ms(time_settings[time_setting - 48]);
                 }
                 break;
@@ -215,91 +232,14 @@ int main(void) {
     return 0;
 }
 
-void IOinit(void){
-    TRISBbits.TRISB5 = 0;
-    TRISBbits.TRISB6 = 0;
-    
-    LED0 = 0;
-    
-    // set pin for button
-    //PB0
-    TRISBbits.TRISB8 = 1;
-    IOCPUBbits.CNPUB8 = 1;
-    //PB1
-    TRISAbits.TRISA4 = 1;
-    IOCPUAbits.CNPUA4 = 1;
-    //PB2
-    TRISBbits.TRISB4 = 1;
-    IOCPUBbits.CNPUB4 = 1;
-}
-
-void IOCinit(void) {
-    // PB0
-    IOCNBbits.IOCNB8 = 1; // IOC high - low
-//    IOCPBbits.IOCPB8 = 1; // IOC low - high
-    //PB1
-    IOCNAbits.IOCNA4 = 1;
-//    IOCPAbits.IOCPA4 = 1;
-    //PB2
-    IOCNBbits.IOCNB4 = 1;
-//    IOCPBbits.IOCPB9 = 1;
-    
-    PADCONbits.IOCON = 1; // enables IOC
-    IOCSTATbits.IOCPBF = 0;
-    
-    IFS1bits.IOCIF = 0;
-    IPC4bits.IOCIP = 3;
-    IEC1bits.IOCIE = 1;
-}
-
-void TM2init() {
-    //T2CON config
-    T2CONbits.T32 = 0;      // operate timer 2 as 16 bit timer
-    T2CONbits.TCKPS = 3;    // set prescaler to 1:256
-    
-    T2CONbits.TCS = 0;      // use internal clock
-    T2CONbits.TSIDL = 0;    // operate in idle mode
-    IFS0bits.T2IF = 0;      // set flag 0
-    IEC0bits.T2IE = 1;      // enable timer interrupt
-    PR2 = 3906;             // set timer limit - overriden in delay function later
-    TMR2 = 0;
-    T2CONbits.TON = 0;      // disable timer initially
-}
-
-void TM3init() {
-    //T3CON config
-    T3CONbits.TCKPS = 3;    // set prescaler to 1:256
-    
-    T3CONbits.TCS = 0;      // use internal clock
-    T3CONbits.TSIDL = 0;    // operate in idle mode
-    IFS0bits.T3IF = 0;      // set flag 0
-    IEC0bits.T3IE = 1;      // enable timer interrupt
-    PR3 = 3906;             // set timer limit - overriden in delay function later
-    TMR2 = 0;
-    T3CONbits.TON = 0;      // disable timer initially
-}
-
 void __attribute__ ((interrupt, no_auto_psv)) _IOCInterrupt(void) {
     
-//    PR3 = (float)(15625/1000) * 75.0;
-//    
-//    TMR3 = 0;           // reset timer count value
-//    T3CONbits.TON = 1;  // turn timer ON
-//    Idle();             // wait for interrupt
-    
+    // set flag for while(1) loop to execute next state logic
     STATE_CHANGE = 1;
     
-    ClearTerminal();
-    
     LED0 = 0;
-
     
-
-    
-//    PB0F = 0;
-//    PB1F = 0;
-//    PB2F = 0;
-//    
+    // CNflag used to exit RecvUartChar while(1) loop
     CNflag = 1;
     IFS1bits.IOCIF = 0;
 
@@ -313,36 +253,13 @@ void __attribute__((interrupt, no_auto_psv)) _T2Interrupt(void){
 }
 
 void __attribute__((interrupt, no_auto_psv)) _T3Interrupt(void){
-    //Don't forget to clear the timer 2 interrupt flag!
+    //Don't forget to clear the timer 3 interrupt flag!
     
+    // set button flags after debounce time expires
     PB0F = !PB0;
     PB1F = !PB1;
     PB2F = !PB2;
     
     IFS0bits.T3IF = 0; // reset flag
     T3CONbits.TON = 0; // turn timer OFF
-}
-
-void delay_ms(uint16_t ms) {
-    
-    // set timer2 count limit
-    // timer frequency of 15625 due to prescaler defined earlier
-    // freq/1000 to convert ms to s
-    PR2 = (float)(15625/1000) * (float)ms;
-    
-    TMR2 = 0;           // reset timer count value
-    T2CONbits.TON = 1;  // turn timer ON
-    Idle();             // wait for interrupt
-}
-
-void delay_ms_3(uint16_t ms) {
-    
-    // set timer3 count limit
-    // timer frequency of 15625 due to prescaler defined earlier
-    // freq/1000 to convert ms to s
-    PR3 = (float)(15625/1000) * (float)ms;
-    
-    TMR3 = 0;           // reset timer count value
-    T3CONbits.TON = 1;  // turn timer ON
-    Idle();             // wait for interrupt
 }
