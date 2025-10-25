@@ -4,6 +4,9 @@
  *
  * Created on October 24, 2025, 5:41 PM
  */
+
+#include "timer.h"
+
 void TM2init(void) {
     //T2CON config
     T2CONbits.T32 = 0;      // operate timer 2 as 16 bit timer
@@ -35,19 +38,21 @@ void delay_ms(uint16_t ms) {
     // set timer2 count limit
     // timer frequency of 15625 due to prescaler defined earlier
     // freq/1000 to convert ms to s
-    PR2 = (float)(15625/1000) * (float)ms;
+    PR2 = (float)(15625/1000) * (float)ms;  // floats used to prevent issues
+                                            // with integer division
     
     TMR2 = 0;           // reset timer count value
     T2CONbits.TON = 1;  // turn timer ON
     Idle();             // wait for interrupt
 }
 
-void delay_ms_3(uint16_t ms) {
+void debounce(uint16_t ms) {
     
     // set timer3 count limit
     // timer frequency of 15625 due to prescaler defined earlier
     // freq/1000 to convert ms to s
-    PR3 = (float)(15625/1000) * (float)ms;
+    PR3 = (float)(15625/1000) * (float)ms;  // floats used to prevent issues
+                                            // with integer division
     
     TMR3 = 0;           // reset timer count value
     T3CONbits.TON = 1;  // turn timer ON
