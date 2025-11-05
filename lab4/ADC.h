@@ -40,7 +40,7 @@
 // TODO Insert declarations
 
 uint16_t do_ADC(void);
-
+void ADCinit(void);
 
 // Comment a function and leverage automatic documentation with slash star star
 /**
@@ -78,4 +78,3 @@ extern "C" {
 #endif /* __cplusplus */
 
 #endif	/* XC_HEADER_TEMPLATE_H */
-
