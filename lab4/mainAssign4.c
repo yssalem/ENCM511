@@ -3,8 +3,8 @@
  * Author: Ibrahim Khalid, Noor Sheikh, Youssef Salem
  *
  * Created FOR ENCM 511
- * PLEASE ADD DATE CREATED HERE: 2025-11-04
- *
+ * PLEASE ADD DATE CREATED HERE: 2025-10-14
+ * 
  * FAILURE TO UPDATE THIS HEADER WITH YOUR GROUP MEMBER NAMES
  * MAY RESULT IN PENALTIES
  */
@@ -59,58 +59,41 @@
 #pragma config SOSCHP = ON    //SOSC High Power Enable bit (valid only when SOSCSEL = 1->Enable SOSC high power mode (default)
 #pragma config ALTI2C1 = ALTI2CEN    //Alternate I2C pin Location->SDA1 and SCL1 on RB9 and RB8
 
-
-
-#include "xc.h"
-#include "IOCInit.h"
-#include "IOInit.h"
-#include "timer.h"
-#include "ADC.h"
+#include <xc.h>
 #include "uart.h"
+#include "ADC.h"
+#include "IOinit.h"
+#include "IOCinit.h"
+#include "timer.h"
+
+#define LED0 LATBbits.LATB5
+#define LED1 LATBbits.LATB6
+#define LED2 LATBbits.LATB7
+#define PB0 PORTBbits.RB8
+
+uint16_t do_ADC(void);
+uint16_t conv = 0;
+long width = 0;
+char bar_character = 'x';
 
 
-#define DEBOUNCE_MS 50
-#define NUM_BUTTONS 3
-
-uint8_t button_state[NUM_BUTTONS] = {0};     // stable state (debounced)
-uint8_t button_pressed[NUM_BUTTONS] = {0};   // flag for new press
-uint8_t debounce_counter[NUM_BUTTONS] = {0}; // stability counter
-
-uint8_t PB0F = 0;
-uint8_t PB1F = 0;
-uint8_t PB2F = 0;
-uint8_t STATE_CHANGE = 0;
-uint8_t raw0, raw1, raw2;
-
-int main(void) {
-   
-    IOinit();
-    IOCinit();
+int main() {
+    
     TM2init();
-    TM3init();
+    IOinit();
+    ADCinit();
     InitUART2();
-    ClearTerminal();
-   
-    while(1){
+    
+    while(1) {
+        ClearTerminal();
+        conv = do_ADC();
+        width = ((float)conv / 1024) * 48;
+        XmitUART2(bar_character, width);
+        delay_ms(1000);
+        
     }
-   
-   
 }
 
-
-void __attribute__ ((interrupt, no_auto_psv)) _IOCInterrupt(void) {
-   
-    // set flag for while(1) loop to execute next state logic
-    STATE_CHANGE = 1;
-   
-    LED0 = 0;
-   
-    // CNflag used to exit RecvUartChar while(1) loop
-    CNflag = 1;
-    IFS1bits.IOCIF = 0;
-
-   
-}
 
 void __attribute__((interrupt, no_auto_psv)) _T2Interrupt(void){
     //Don't forget to clear the timer 2 interrupt flag!
@@ -119,73 +102,4 @@ void __attribute__((interrupt, no_auto_psv)) _T2Interrupt(void){
 }
 
 
-void __attribute__((interrupt, no_auto_psv)) _T3Interrupt(void) {
-    IFS0bits.T3IF = 0;
 
-    // Sample each button directly
-    raw0 = PB0;
-    raw1 = PB1;
-    raw2 = PB2;
-
-    // Button 0
-    if (raw0 == button_state[0]) {
-        if (debounce_counter[0] < DEBOUNCE_MS) debounce_counter[0]++;
-    } else {
-        debounce_counter[0] = 0;
-        button_state[0] = raw0;
-    }
-    if (debounce_counter[0] >= DEBOUNCE_MS && raw0 == 1)
-        button_pressed[0] = 1;
-
-    // Button 1
-    if (raw1 == button_state[1]) {
-        if (debounce_counter[1] < DEBOUNCE_MS) debounce_counter[1]++;
-    } else {
-        debounce_counter[1] = 0;
-        button_state[1] = raw1;
-    }
-    if (debounce_counter[1] >= DEBOUNCE_MS && raw1 == 1)
-        button_pressed[1] = 1;
-
-    // Button 2
-    if (raw2 == button_state[2]) {
-        if (debounce_counter[2] < DEBOUNCE_MS) debounce_counter[2]++;
-    } else {
-        debounce_counter[2] = 0;
-        button_state[2] = raw2;
-    }
-    if (debounce_counter[2] >= DEBOUNCE_MS && raw2 == 1)
-        button_pressed[2] = 1;
-    T3CONbits.TON = 1;
-}
-
-void ADCinit() {
-    AD1CON2bits.PVCFG = 00; // High ref = VDD
-    AD1CON2bits.NVCFG0 = 0; // Low ref = VSS
-    
-    AD1CHSbits.CH0NA = 000; // Neg input = VSS
-    AD1CHSbits.CH0SA = 00011; // Pos input = AN3 ???
-    
-    AD1CON3bits.ADCS = 11111111; // set analog conversion clock
-    
-    AD1CON3bits.SAMC = 11111; // set auto sample time
-    AD1CON1bits.SSRC = 0111; // auto convert mode
-    
-    AD1CON1bits.FORM = 00; // unsigned decimal result
-    
-    AD1CON2bits.SMPI = 00000;
-    
-    AD1CON1bits.ADON = 1;
-}
-
-uint16_t do_ADC(void) {
-    uint16_t result;
-    AD1CON1bits.SAMP = 1;
-    delay_ms(1);
-    AD1CON1bits.SAMP = 0;
-    while(!AD1CON1bits.DONE);
-    result = ADC1BUF0;
-    
-    return result;
-
-}
