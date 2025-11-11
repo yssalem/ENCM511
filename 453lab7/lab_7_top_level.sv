@@ -37,7 +37,7 @@ module lab_7_top_level(
 
     // XADC signals
     logic        ready;              // Data ready from XADC
-    logic [15:0] data;              // Raw ADC data
+    logic [15:0] data;              // Raw XADC data
     logic        enable;                // XADC enable
    // logic [4:0]  channel_out;           // Current XADC channel
     //logic        eoc_out;               // End of conversion
@@ -46,8 +46,18 @@ module lab_7_top_level(
     logic        busy_out;              // XADC busy signal
     
     logic comparator; // comp mux output
+    
+    logic ready_r_out;
    
-    logic raw_adc; // recorder output
+    logic [7:0] raw_adc; // recorder output
+    
+    logic [15:0] scaled_xadc_data, scaled_adc_data; // processing output
+    
+    logic [15:0] signal_select_out;
+    
+    logic [15:0] bcd_out;
+    
+    logic [15:0] binbcd_sel_out;
     
     // Constants
     localparam CHANNEL_ADDR = 7'h1f;     // XA4/AD15 (for XADC4)
@@ -80,24 +90,74 @@ module lab_7_top_level(
         .R2R_out(R2R_out)
     );
     
-    mux21 #(.WIDTH(1)) COMP_SELECT (
-        .select(switches_inputs[14]),
+    mux21 #(.WIDTH(1)) COMP_SEL (
+        .select(switches_inputs[13]),
         .d0(pwm_comp),
         .d1(r2r_comp),
         .y(comparator)
     );
     
-    recorder #(.WIDTH(8)) RECORDER (
+    recorder #(.DC_WIDTH(8)) RECORDER (
         .clk(clk),
         .reset(reset),
         .ready(comparator),
         .duty_cycle(R2R_out),
-        .duty_cycle_out(raw_adc)
+        .duty_cycle_out(raw_adc),
+        .ready_r_out(ready_r_out)
     );
     
+    xadc_processing XADC_PROC (
+        .clk(clk),
+        .reset(reset),
+        .ready(ready),
+        .data(data),
+        .scaled_adc_data(scaled_xadc_data),
+        .ready_pulse(ready_pulse)
+    );
+    
+    adc_processing ADC_PROC (
+        .clk(clk),
+        .reset(reset),
+        .ready(ready_r_out),
+        .data(raw_adc),
+        .scaled_adc_data(scaled_adc_data)
+    );
+    
+    mux41 #(.WIDTH(16)) SIGNAL_SEL (
+        .select(switches_inputs[15:14]),
+        .d0(data),
+        .d1(scaled_xadc_data),
+        .d2({8'b0, raw_adc}),
+        .d3(scaled_adc_data),
+        .y(signal_select_out)
+    );
+    
+    bin_to_bcd BIN2BCD (
+        .clk(clk),
+        .reset(reset),
+        .bin_in(signal_select_out),
+        .bcd_out(bcd_out)
+    );
+    
+    mux21 #(.WIDTH(16)) BINBCD_SEL (
+        .select(switches_inputs[12]),
+        .d0(signal_select_out),
+        .d1(bcd_out),
+        .y(binbcd_sel_out)
+    );
+    
+    seven_segment_display_subsystem SSD (
+        .clk(clk),
+        .reset(reset),
+        .sec_dig1(binbcd_sel_out[3:0]),
+        .sec_dig2(binbcd_sel_out[7:4]),
+        .min_dig1(binbcd_sel_out[11:8]),
+        .min_dig2(binbcd_sel_out[15:12]),
+        .CA(CA), .CB(CB), .CC(CC), .CD(CD),
+        .CE(CE), .CF(CF), .CG(CG), .DP(DP),
+        .AN1(AN1), .AN2(AN2), .AN3(AN3), .AN4(AN4)
+    );
      
-    
-    
     
     
 endmodule
