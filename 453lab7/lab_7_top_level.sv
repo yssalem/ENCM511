@@ -23,8 +23,7 @@
 module lab_7_top_level(
     input  logic   clk,
     input  logic   reset,
-    input  logic [15:0] switches_inputs,
-    input  logic [1:0] bin_bcd_select,
+    input  logic   binbcd_switch, signal_switch, comp_switch, raw_switch, avg_switch, scaled_switch,
     input          vauxp15, // Analog input (positive) - connect to JXAC4:N2 PMOD pin  (XADC4)
     input          vauxn15, // Analog input (negative) - connect to JXAC10:N1 PMOD pin (XADC4)
     input          pwm_comp, r2r_comp,
@@ -47,13 +46,17 @@ module lab_7_top_level(
     
     logic comparator; // comp mux output
     
+    logic pwm_sync_out, r2r_sync_out; // synchronized comparator inputs
+    
     logic ready_r_out;
    
     logic [7:0] raw_adc; // recorder output
     
+    logic [15:0] averaged_xadc_data, averaged_adc_data; // processing output
+    
     logic [15:0] scaled_xadc_data, scaled_adc_data; // processing output
     
-    logic [15:0] signal_select_out;
+    logic [15:0] xadc_sel_out, adc_sel_out, signal_select_out;
     
     logic [15:0] bcd_out;
     
@@ -82,18 +85,32 @@ module lab_7_top_level(
         .busy_out(busy_out)      // XADC busy signal
     );
     
-    sawtooth_generator SAWTOOTH (
+    synchro PWM_SYNCHRONIZER (
         .clk(clk),
         .reset(reset),
-        .enable(enable),
+        .in(pwm_comp),
+        .out(pwm_sync_out)
+    );
+    
+    synchro R2R_SYNCHRONIZER (
+        .clk(clk),
+        .reset(reset),
+        .in(r2r_comp),
+        .out(r2r_sync_out)
+    );
+    
+    sawtooth_generator #(.WAVE_FREQ(10)) SAWTOOTH (
+        .clk(clk),
+        .reset(reset),
+        .enable(1),
         .pwm_out(pwm_out),
         .R2R_out(R2R_out)
     );
     
     mux21 #(.WIDTH(1)) COMP_SEL (
-        .select(switches_inputs[13]),
-        .d0(pwm_comp),
-        .d1(r2r_comp),
+        .select(comp_switch),
+        .d0(pwm_sync_out),
+        .d1(r2r_sync_out),
         .y(comparator)
     );
     
@@ -111,24 +128,40 @@ module lab_7_top_level(
         .reset(reset),
         .ready(ready),
         .data(data),
+        .averaged_data(averaged_xadc_data),
         .scaled_adc_data(scaled_xadc_data),
         .ready_pulse(ready_pulse)
     );
     
-    adc_processing ADC_PROC (
+    adc_processing #(.SCALING_FACTOR(825), .SHIFT_FACTOR(14)) ADC_PROC (
         .clk(clk),
         .reset(reset),
         .ready(ready_r_out),
         .data(raw_adc),
+        .averaged_data(averaged_adc_data),
         .scaled_adc_data(scaled_adc_data)
     );
     
-    mux41 #(.WIDTH(16)) SIGNAL_SEL (
-        .select(switches_inputs[15:14]),
-        .d0(data),
-        .d1(scaled_xadc_data),
-        .d2({8'b0, raw_adc}),
-        .d3(scaled_adc_data),
+    mux31_onehot #(.WIDTH(16)) XADC_ONE_HOT (
+        .select({raw_switch, avg_switch, scaled_switch}),
+        .d0(scaled_xadc_data),
+        .d1(averaged_xadc_data),
+        .d2(data),
+        .y(xadc_sel_out)
+    );
+    
+    mux31_onehot #(.WIDTH(16)) ADC_ONE_HOT (
+        .select({raw_switch, avg_switch, scaled_switch}),
+        .d0(scaled_adc_data),
+        .d1(averaged_adc_data),
+        .d2(raw_adc),
+        .y(adc_sel_out)
+    );
+    
+    mux21 #(.WIDTH(16)) SIGNAL_SEL (
+        .select(signal_switch),
+        .d0(xadc_sel_out),
+        .d1(adc_sel_out),
         .y(signal_select_out)
     );
     
@@ -140,7 +173,7 @@ module lab_7_top_level(
     );
     
     mux21 #(.WIDTH(16)) BINBCD_SEL (
-        .select(switches_inputs[12]),
+        .select(binbcd_switch),
         .d0(signal_select_out),
         .d1(bcd_out),
         .y(binbcd_sel_out)
@@ -158,6 +191,4 @@ module lab_7_top_level(
         .AN1(AN1), .AN2(AN2), .AN3(AN3), .AN4(AN4)
     );
      
-    
-    
 endmodule
