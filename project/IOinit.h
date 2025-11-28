@@ -15,7 +15,7 @@
 #define LED2    _LATB7
 #define PB0     _RB8
 #define PB1     _RA4
-#define PB2     _RB4
+#define PB2     _RB9
 
 void IOinit(void);
 
