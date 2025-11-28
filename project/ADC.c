@@ -30,14 +30,31 @@ void ADCinit() {
 }
 
 
+
 uint16_t do_ADC(void) {
     uint16_t result;
-    AD1CON1bits.SAMP = 1;
-    delay_ms(1); /* replace with FreeRTOS Delay */ 
-    AD1CON1bits.SAMP = 0;
-    while(!AD1CON1bits.DONE);
-    result = ADC1BUF0;
+    
+    AD1CON1bits.SAMP = 1;  // Start sampling
+    
+    // Short delay for sampling time
+    for(volatile uint16_t i = 0; i < 8000; i++) {
+        Nop();
+    }
+    
+    AD1CON1bits.SAMP = 0;  // Start conversion
+    
+    // Wait for conversion with timeout
+    uint16_t timeout = 50000;
+    while(!AD1CON1bits.DONE && timeout > 0) {
+        timeout--;
+        Nop();
+    }
+    
+    if(timeout > 0) {
+        result = ADC1BUF0;
+    } else {
+        result = 512; // Return mid-range value on timeout
+    }
     
     return result;
-
 }
