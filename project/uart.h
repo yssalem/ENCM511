@@ -33,6 +33,9 @@
 
 #include <xc.h> // include processor files - each processor file is guarded.  
 #include "string.h"
+#include "FreeRTOS.h"
+#include "FreeRTOS/include/queue.h"
+#include "queue.h"
 // TODO Insert appropriate #include <>
 
 // TODO Insert C++ class definitions if appropriate
@@ -69,6 +72,9 @@ void XmitUART2(char CharNum, unsigned int repeatNo);
 void RecvUart(char* input, uint8_t buf_size);
 char RecvUartChar(void);
 void ClearTerminal(void);
+extern QueueHandle_t uart_queue; 
+extern uint8_t RXFlag;
+
 #ifdef	__cplusplus
 extern "C" {
 #endif /* __cplusplus */
