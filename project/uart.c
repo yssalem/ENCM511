@@ -7,9 +7,12 @@
 
 
 #include "uart.h"
+#include "FreeRTOS.h"
+#include "queue.h"
 
 uint8_t received_char = 0;
 uint8_t RXFlag = 0;
+
 void ClearTerminal(void) {
     Disp2String("\033[2J\033[H");
 }
@@ -158,11 +161,17 @@ char RecvUartChar()
     }
 }
 
+
+
 void __attribute__ ((interrupt, no_auto_psv)) _U2RXInterrupt(void) {
 
+    BaseType_t xHigherPriorityTaskWoken = pdFALSE;
+    
 	IFS1bits.U2RXIF = 0;
     
     received_char = U2RXREG;
+    
+    xQueueSendFromISR(uart_queue, &received_char, &xHigherPriorityTaskWoken);
     
     RXFlag = 1;
     
