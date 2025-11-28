@@ -27,8 +27,8 @@ void IOinit(void){
     TRISAbits.TRISA4 = 1;
     IOCPUAbits.CNPUA4 = 1;
     //PB2
-    TRISBbits.TRISB4 = 1;
-    IOCPUBbits.CNPUB4 = 1;
+    TRISBbits.TRISB9 = 1;
+    IOCPUBbits.CNPUB9 = 1;
     //ADC init
     TRISBbits.TRISB3 = 1;
     ANSELBbits.ANSB3 = 1;
